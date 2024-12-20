@@ -1,0 +1,78 @@
+services:
+    database:
+        image: mariadb:10.11
+        environment:
+            MARIADB_DATABASE: app
+            MARIADB_ROOT_PASSWORD: password
+            MARIADB_AUTO_UPGRADE: 'yes'
+            MARIADB_DISABLE_UPGRADE_BACKUP: 'yes'
+        volumes:
+            - database:/var/lib/mysql:rw
+            - ./.docker/database/plugins/libudf_uuid.so:/usr/lib/mysql/plugin/libudf_uuid.so
+            - ./.docker/database/init:/docker-entrypoint-initdb.d
+        ports:
+            - "3306:3306"
+        networks:
+            - shop-net
+
+    nginx:
+        image: nginx:alpine
+        volumes:
+            - ./app:/var/www/html:delegated
+            - ./.docker/nginx/nginx.conf:/etc/nginx/nginx.conf
+            - ./.docker/nginx/sites/:/etc/nginx/sites-available
+        depends_on:
+            - php
+        ports:
+            - "80:80"
+        networks:
+            shop-net:
+                aliases:
+                    - shop.fbi.com
+
+    php:
+        image: thecodingmachine/php:7.2-v4-fpm
+        volumes:
+            - ./app:/var/www/html/:delegated
+            - phpcache:/var/www/html/var
+        depends_on:
+            - database
+        environment:
+            PHP_EXTENSION_XDEBUG: 1
+            PHP_EXTENSION_EXCIMER: 1
+            PHP_EXTENSION_AMQP: 1
+            PHP_EXTENSION_BCMATH: 1
+            PHP_EXTENSION_IMAGICK: 1
+            PHP_EXTENSION_INTL: 1
+            PHP_EXTENSION_GD: 1
+            PHP_EXTENSION_PCOV: 1
+            PHP_INI_ERROR_REPORTING: E_ALL
+            PHP_INI_MEMORY_LIMIT: 512m
+            PHP_INI_MAX_EXECUTION_TIME: 60
+            PHP_INI_UPLOAD_MAX_FILESIZE: 500m
+            PHP_INI_POST_MAX_SIZE: 500m
+            PHP_INI_XDEBUG__LOG_LEVEL: 0
+            PHP_INI_XDEBUG__START_WITH_REQUEST: yes
+            PHP_IDE_CONFIG: "serverName=shop.fbi.com"
+        networks:
+            - shop-net
+        expose:
+            - '9000'
+            - '9003'
+
+    adminer:
+        image: adminer
+        environment:
+            ADMINER_DEFAULT_SERVER: database
+        ports:
+            - "8888:8080"
+        networks:
+            - shop-net
+
+volumes:
+    database:
+    phpcache:
+
+networks:
+    shop-net:
+        driver: bridge
